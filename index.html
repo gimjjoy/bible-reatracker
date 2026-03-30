@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성경 읽기 트래커</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+:root {
+  --bg:#f5f3ee; --surface:#fff; --surface2:#f0ede6;
+  --border:rgba(0,0,0,0.08); --text:#1a1814; --text2:#6b6760; --text3:#9e9b96;
+  --green:#2d7d5a; --green-light:#e8f5ee; --green-mid:#4CAF82;
+  --red:#c0392b; --red-light:#fdf0ee;
+  --amber:#b5690a; --amber-light:#fef4e4;
+  --blue:#1a6fa8; --blue-light:#e8f2fa;
+  --purple:#6b3fa0; --purple-light:#f0eafa;
+  --radius:12px; --radius-sm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:2rem 1rem;}
+.page{max-width:700px;margin:0 auto;}
+
+/* 공통 카드 */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;cursor:pointer;user-select:none;}
+.card-header-left{display:flex;align-items:center;gap:8px;}
+.card-title{font-size:14px;font-weight:500;color:var(--text2);}
+.card-badge{font-size:11px;padding:3px 9px;border-radius:10px;font-weight:500;}
+.card-toggle{font-size:12px;color:var(--text3);}
+.card-body{padding:0 18px 18px;border-top:1px solid var(--border);}
+
+/* 헤더 */
+.header{margin-bottom:1.5rem;}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:4px;}
+.title{font-size:26px;font-weight:700;letter-spacing:-0.5px;}
+.title span{color:var(--green);}
+.subtitle{font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;}
+.streak-pill{display:inline-flex;align-items:center;gap:6px;background:var(--amber-light);color:var(--amber);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:500;border:1px solid rgba(181,105,10,0.15);}
+.streak-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+/* 설정 */
+.setup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;}
+.setup-field label{font-size:12px;color:var(--text3);display:block;margin-bottom:5px;font-weight:500;}
+.setup-field select,.setup-field input{width:100%;font-size:14px;font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);background:var(--surface2);outline:none;}
+.setup-field select:focus,.setup-field input:focus{border-color:var(--green);background:var(--surface);}
+.setup-divider{margin:16px 0 12px;font-size:12px;font-weight:500;color:var(--text3);border-top:1px solid var(--border);padding-top:14px;}
+.setup-hint{font-size:12px;color:var(--green);margin-top:8px;font-family:'DM Mono',monospace;}
+.start-pos-row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;}
+.btn-primary{padding:9px 20px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;font-family:'Noto Sans KR',sans-serif;cursor:pointer;margin-top:14px;}
+.btn-primary:hover{opacity:0.88;}
+
+/* 현재 읽는 책 */
+.now-reading-card{background:var(--green);border-radius:var(--radius);padding:18px 22px;margin-bottom:1rem;position:relative;overflow:hidden;}
+.now-reading-card::before{content:'';position:absolute;right:-20px;top:-20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.07);}
+.nr-label{font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:0.5px;text-transform:uppercase;font-weight:500;margin-bottom:6px;}
+.nr-main{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+.nr-book{font-size:28px;font-weight:700;color:#fff;letter-spacing:-0.5px;}
+.nr-chapter{font-size:16px;color:rgba(255,255,255,0.75);}
+.nr-range{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:8px;min-height:18px;}
+.nr-tags{display:flex;gap:8px;flex-wrap:wrap;}
+.nr-tag{font-size:12px;padding:3px 10px;border-radius:10px;font-weight:500;}
+.nr-tag-ot{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.9);}
+.nr-tag-nt{background:rgba(255,220,100,0.25);color:#fff3a0;}
+.nr-tag-info{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);font-family:'DM Mono',monospace;}
+
+/* 입력 카드 */
+.input-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:16px 20px;margin-bottom:1rem;}
+.input-label{font-size:12px;color:var(--text3);margin-bottom:10px;letter-spacing:0.3px;text-transform:uppercase;font-weight:500;}
+.input-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.chapter-input{width:80px;font-size:26px;font-weight:700;font-family:'DM Mono',monospace;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);text-align:center;padding:8px 4px;outline:none;}
+.chapter-input:focus{border-color:var(--green);background:var(--surface);}
+.chapter-unit{font-size:14px;color:var(--text3);}
+.btn-record{padding:10px 22px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;}
+.btn-record:hover{opacity:0.88;}
+
+/* 미리보기 + 수동 보정 영역 */
+.range-preview-area{margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border);}
+.range-auto{font-size:13px;color:var(--blue);font-weight:500;margin-bottom:6px;}
+.range-correct-toggle{font-size:12px;color:var(--text3);cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+.range-correct-toggle:hover{color:var(--text2);}
+.range-correct-body{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.range-correct-label{font-size:12px;color:var(--text3);margin-bottom:8px;}
+.range-correct-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.rc-select{font-size:13px;font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;color:var(--text);background:var(--surface);outline:none;}
+.rc-select:focus{border-color:var(--blue);}
+.rc-input{width:56px;font-size:13px;font-family:'DM Mono',monospace;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 4px;text-align:center;color:var(--text);background:var(--surface);outline:none;}
+.rc-input:focus{border-color:var(--blue);}
+.btn-correct{padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:500;font-family:'Noto Sans KR',sans-serif;cursor:pointer;}
+.btn-correct:hover{opacity:0.85;}
+.btn-correct-clear{padding:6px 10px;background:transparent;color:var(--text3);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:'Noto Sans KR',sans-serif;cursor:pointer;}
+.btn-correct-clear:hover{color:var(--red);border-color:var(--red);}
+.range-result{font-size:12px;margin-top:6px;}
+
+.today-msg{font-size:12px;color:var(--text3);margin-top:6px;}
+
+/* 통계 */
+.cards-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px;}
+.cards-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1.5rem;}
+.stat-card{background:var(--surface);border-radius:var(--radius);padding:14px 16px;border:1px solid var(--border);}
+.stat-label{font-size:11px;color:var(--text3);margin-bottom:5px;letter-spacing:0.3px;font-weight:500;text-transform:uppercase;}
+.stat-value{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);letter-spacing:-0.5px;}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:3px;}
+
+/* 구약/신약 */
+.testament-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:1.5rem;}
+.testament-card{background:var(--surface);border-radius:var(--radius);padding:14px 16px;border:1px solid var(--border);}
+.tc-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.tc-title{font-size:13px;font-weight:500;color:var(--text2);}
+.tc-pct{font-size:13px;font-family:'DM Mono',monospace;font-weight:500;}
+.tc-bar-bg{background:var(--surface2);border-radius:4px;height:6px;overflow:hidden;margin-bottom:5px;}
+.tc-bar-fill{height:6px;border-radius:4px;transition:width 0.5s;}
+.tc-detail{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+/* 진도바 */
+.progress-section{background:var(--surface);border-radius:var(--radius);padding:16px 18px;border:1px solid var(--border);margin-bottom:1.5rem;}
+.progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.progress-title{font-size:13px;color:var(--text2);font-weight:500;}
+.progress-pct{font-size:13px;font-family:'DM Mono',monospace;color:var(--green);font-weight:500;}
+.progress-bar-bg{background:var(--surface2);border-radius:4px;height:8px;overflow:hidden;margin-bottom:6px;}
+.progress-bar-fill{height:8px;border-radius:4px;background:linear-gradient(90deg,var(--green) 0%,var(--green-mid) 100%);transition:width 0.6s cubic-bezier(0.4,0,0.2,1);min-width:2px;}
+.progress-detail{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+/* 탭 */
+.tab-row{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;}
+.tab{padding:7px 16px;font-size:13px;font-weight:500;border-radius:20px;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:var(--surface);font-family:'Noto Sans KR',sans-serif;transition:all 0.15s;}
+.tab:hover{border-color:var(--green);color:var(--green);}
+.tab.active{background:var(--green);color:#fff;border-color:var(--green);}
+
+/* 차트 */
+.chart-card{background:var(--surface);border-radius:var(--radius);padding:16px 18px;border:1px solid var(--border);margin-bottom:1.5rem;}
+.chart-legend{display:flex;gap:14px;margin-bottom:12px;font-size:12px;color:var(--text2);flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:5px;}
+.legend-dot{width:10px;height:10px;border-radius:2px;}
+.chart-wrap{position:relative;width:100%;height:180px;}
+
+/* 로그 */
+.log-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:1.5rem;max-height:420px;overflow-y:auto;}
+.log-row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 16px;border-bottom:1px solid var(--border);gap:8px;}
+.log-row:last-child{border-bottom:none;}
+.log-left{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;}
+.log-date{color:var(--text2);font-family:'DM Mono',monospace;font-size:12px;}
+.log-range{font-size:12px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.log-range.corrected{color:var(--blue);}
+.log-detail{font-size:11px;color:var(--text3);}
+.log-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.log-count{font-weight:700;font-family:'DM Mono',monospace;color:var(--text);font-size:13px;}
+.badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.badge-ok{background:var(--green-light);color:var(--green);}
+.badge-fail{background:var(--red-light);color:var(--red);}
+.badge-retro{background:var(--blue-light);color:var(--blue);}
+.badge-corrected{background:var(--purple-light);color:var(--purple);}
+.btn-del{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.btn-del:hover{background:var(--red-light);color:var(--red);border-color:var(--red);}
+.empty{padding:2rem;text-align:center;font-size:13px;color:var(--text3);}
+
+/* 도구 */
+.tools-section{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:14px 16px;margin-bottom:1.5rem;}
+.tools-title{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:10px;}
+.tools-row{display:flex;gap:8px;flex-wrap:wrap;}
+.btn-tool{padding:8px 14px;font-size:12px;font-weight:500;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:'Noto Sans KR',sans-serif;transition:all 0.15s;}
+.btn-tool:hover{border-color:var(--green);color:var(--green);background:var(--green-light);}
+.btn-danger{color:var(--red);}
+.btn-danger:hover{background:var(--red-light);border-color:var(--red);color:var(--red);}
+.footer{text-align:center;font-size:11px;color:var(--text3);padding-bottom:1rem;font-family:'DM Mono',monospace;}
+
+@media(max-width:480px){
+  .cards-grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .testament-grid{grid-template-columns:1fr;}
+  .title{font-size:22px;}
+  .setup-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- 헤더 -->
+<div class="header">
+  <div class="header-top">
+    <div>
+      <div class="title">성경 읽기 <span>트래커</span></div>
+      <div class="subtitle" id="headerSubtitle">목표를 설정해주세요</div>
+    </div>
+    <div class="streak-pill"><div class="dot"></div><span id="streakText">연속 0일</span></div>
+  </div>
+</div>
+
+<!-- 목표 설정 -->
+<div class="card" style="margin-bottom:1rem;">
+  <div class="card-header" onclick="toggleCard('setupBody','setupToggle')">
+    <div class="card-header-left">
+      <span class="card-title">목표 설정</span>
+      <span class="card-badge" id="setupBadge" style="background:var(--green-light);color:var(--green);">설정 필요</span>
+    </div>
+    <span class="card-toggle" id="setupToggle">▼ 열기</span>
+  </div>
+  <div class="card-body" id="setupBody" style="display:none;">
+    <div class="setup-grid">
+      <div class="setup-field">
+        <label>목표 독수</label>
+        <select id="setGoalDok" oninput="updateSetupHint()">
+          <option value="1">1독</option><option value="3">3독</option>
+          <option value="5">5독</option><option value="10" selected>10독</option>
+          <option value="20">20독</option><option value="custom">직접 입력</option>
+        </select>
+      </div>
+      <div class="setup-field" id="customDokField" style="display:none;">
+        <label>독수 직접 입력</label>
+        <input type="number" id="setCustomDok" min="1" max="100" value="10" oninput="updateSetupHint()"/>
+      </div>
+      <div class="setup-field">
+        <label>목표 기간</label>
+        <select id="setGoalYears" oninput="updateSetupHint()">
+          <option value="1">1년</option><option value="2">2년</option>
+          <option value="3" selected>3년</option><option value="5">5년</option>
+          <option value="custom">직접 입력</option>
+        </select>
+      </div>
+      <div class="setup-field" id="customYearsField" style="display:none;">
+        <label>기간 직접 입력 (년)</label>
+        <input type="number" id="setCustomYears" min="1" max="20" value="3" oninput="updateSetupHint()"/>
+      </div>
+      <div class="setup-field">
+        <label>시작일</label>
+        <input type="date" id="setStartDate"/>
+      </div>
+      <div class="setup-field">
+        <label>1일 목표 장수 (자동계산)</label>
+        <input type="number" id="setDailyGoal" min="1" max="200" value="10" readonly style="color:var(--green);font-weight:700;"/>
+      </div>
+    </div>
+
+    <div class="setup-divider">시작 위치 (처음부터가 아닌 경우 설정)</div>
+    <div class="start-pos-row">
+      <div class="setup-field" style="flex:2;min-width:140px;">
+        <label>시작 책</label>
+        <select id="spBookSel" oninput="onStartBookChange()"></select>
+      </div>
+      <div class="setup-field" style="flex:1;min-width:80px;">
+        <label>시작 장</label>
+        <input type="number" id="spChapSel" min="1" value="1" oninput="updateSpPreview()"/>
+      </div>
+    </div>
+    <div class="setup-hint" id="spPreview">→ 창세기 1장부터 시작</div>
+    <div class="setup-hint" id="setupHint" style="margin-top:2px;"></div>
+    <button class="btn-primary" onclick="saveSetup()">저장</button>
+  </div>
+</div>
+
+<!-- 현재 읽는 책 -->
+<div class="now-reading-card">
+  <div class="nr-label">현재 읽고 있는 책</div>
+  <div class="nr-main">
+    <span class="nr-book" id="nrBook">창세기</span>
+    <span class="nr-chapter" id="nrChapter">1장</span>
+  </div>
+  <div class="nr-range" id="nrRange"></div>
+  <div class="nr-tags">
+    <span class="nr-tag nr-tag-ot" id="nrTestament">구약</span>
+    <span class="nr-tag nr-tag-info" id="nrBookProg">1 / 50장</span>
+    <span class="nr-tag nr-tag-info" id="nrBookCount">1 / 66권</span>
+  </div>
+</div>
+
+<!-- 오늘 기록 -->
+<div class="input-card">
+  <div class="input-label">오늘 읽은 장수 기록</div>
+  <div class="input-row">
+    <input type="number" class="chapter-input" id="chapInput" min="0" max="200" value="10" oninput="updateInputPreview()"/>
+    <span class="chapter-unit">장</span>
+    <button class="btn-record" onclick="addToday()">기록하기</button>
+  </div>
+
+  <!-- 미리보기 + 수동 보정 -->
+  <div class="range-preview-area" id="rangePreviewArea" style="display:none;">
+    <div class="range-auto" id="rangeAutoText"></div>
+    <div class="range-correct-toggle" onclick="toggleCorrect()">끝 위치가 다르면 직접 수정 ▾</div>
+    <div class="range-correct-body" id="correctBody" style="display:none;">
+      <div class="range-correct-label">실제 끝난 위치 선택</div>
+      <div class="range-correct-row">
+        <select class="rc-select" id="rcBookSel" oninput="onRcBookChange()"></select>
+        <input type="number" class="rc-input" id="rcChapSel" min="1" value="1" oninput="updateCorrectPreview()"/>
+        <span style="font-size:13px;color:var(--text3);">장</span>
+        <button class="btn-correct" onclick="applyCorrection()">적용</button>
+        <button class="btn-correct-clear" onclick="clearCorrection()">초기화</button>
+      </div>
+      <div class="range-result" id="correctResult"></div>
+    </div>
+  </div>
+
+  <div class="today-msg" id="todayMsg">오늘 아직 기록이 없습니다.</div>
+</div>
+
+<!-- 소급 입력 -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-header" onclick="toggleCard('retroBody','retroToggle')">
+    <div class="card-header-left">
+      <span class="card-title">과거 날짜 소급 입력</span>
+      <span class="card-badge" style="background:var(--blue-light);color:var(--blue);">날짜 선택</span>
+    </div>
+    <span class="card-toggle" id="retroToggle">▼ 열기</span>
+  </div>
+  <div class="card-body" id="retroBody" style="display:none;">
+    <div class="input-row" style="margin-top:14px;flex-wrap:wrap;gap:10px;">
+      <input type="date" id="retroDate" style="font-size:14px;font-family:'DM Mono',monospace;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);background:var(--surface2);outline:none;" oninput="updateRetroPreview()"/>
+      <input type="number" id="retroChap" min="0" max="200" value="10" style="width:68px;font-size:18px;font-weight:700;font-family:'DM Mono',monospace;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 4px;text-align:center;color:var(--text);background:var(--surface2);outline:none;" oninput="updateRetroPreview()"/>
+      <span style="font-size:13px;color:var(--text3);">장</span>
+      <button class="btn-primary" style="margin-top:0;padding:9px 18px;background:var(--blue);" onclick="addRetro()">저장</button>
+    </div>
+    <!-- 소급 미리보기 + 보정 -->
+    <div class="range-preview-area" id="retroPreviewArea" style="display:none;margin-top:10px;">
+      <div class="range-auto" id="retroAutoText"></div>
+      <div class="range-correct-toggle" onclick="toggleRetroCorrect()">끝 위치가 다르면 직접 수정 ▾</div>
+      <div class="range-correct-body" id="retroCorrectBody" style="display:none;">
+        <div class="range-correct-label">실제 끝난 위치 선택</div>
+        <div class="range-correct-row">
+          <select class="rc-select" id="rrBookSel" oninput="onRrBookChange()"></select>
+          <input type="number" class="rc-input" id="rrChapSel" min="1" value="1" oninput="updateRetroCorrectPreview()"/>
+          <span style="font-size:13px;color:var(--text3);">장</span>
+          <button class="btn-correct" onclick="applyRetroCorrection()">적용</button>
+          <button class="btn-correct-clear" onclick="clearRetroCorrection()">초기화</button>
+        </div>
+        <div class="range-result" id="retroCorrectResult"></div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px;" id="retroMsg">날짜를 선택하고 읽은 장수를 입력하세요.</div>
+  </div>
+</div>
+
+<!-- 통계 -->
+<div class="cards-grid">
+  <div class="stat-card">
+    <div class="stat-label">누적 장수</div>
+    <div class="stat-value" id="totalChap">0</div>
+    <div class="stat-sub" id="doksooInfo">1독 진행 중</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">전체 목표 진도</div>
+    <div class="stat-value" id="totalPct">0%</div>
+    <div class="stat-sub" id="totalGoalSub">—</div>
+  </div>
+</div>
+<div class="cards-grid-3">
+  <div class="stat-card">
+    <div class="stat-label">기록일수</div>
+    <div class="stat-value" id="totalDays">0</div>
+    <div class="stat-sub">일</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">달성일</div>
+    <div class="stat-value" id="successDays">0</div>
+    <div class="stat-sub" id="goalPerDaySub">목표 이상</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">달성률</div>
+    <div class="stat-value" id="successRate">-</div>
+    <div class="stat-sub">일별 기준</div>
+  </div>
+</div>
+
+<!-- 구약/신약 -->
+<div class="testament-grid">
+  <div class="testament-card">
+    <div class="tc-header"><span class="tc-title">구약 진도</span><span class="tc-pct" id="otPct" style="color:var(--green);">0%</span></div>
+    <div class="tc-bar-bg"><div class="tc-bar-fill" id="otBar" style="width:0%;background:var(--green);"></div></div>
+    <div class="tc-detail" id="otDetail">0 / 929장 · 39권</div>
+  </div>
+  <div class="testament-card">
+    <div class="tc-header"><span class="tc-title">신약 진도</span><span class="tc-pct" id="ntPct" style="color:var(--purple);">0%</span></div>
+    <div class="tc-bar-bg"><div class="tc-bar-fill" id="ntBar" style="width:0%;background:var(--purple);"></div></div>
+    <div class="tc-detail" id="ntDetail">0 / 260장 · 27권</div>
+  </div>
+</div>
+
+<!-- 독 진도바 -->
+<div class="progress-section">
+  <div class="progress-header">
+    <span class="progress-title" id="progLabel">1독 진도</span>
+    <span class="progress-pct" id="progPct">0%</span>
+  </div>
+  <div class="progress-bar-bg"><div class="progress-bar-fill" id="progBar" style="width:0%"></div></div>
+  <div class="progress-detail" id="progDetail">0 / 1,189장</div>
+</div>
+
+<!-- 탭 -->
+<div class="tab-row">
+  <div class="tab active" onclick="switchTab('chart',this)">그래프</div>
+  <div class="tab" onclick="switchTab('log',this)">기록 목록</div>
+</div>
+
+<!-- 차트 -->
+<div id="tabChart" class="chart-card">
+  <div class="chart-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#2d7d5a"></div><span>달성</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#e8c5c2"></div><span>미달</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a6fa8"></div><span>소급</span></div>
+  </div>
+  <div class="chart-wrap"><canvas id="myChart"></canvas></div>
+</div>
+
+<!-- 로그 -->
+<div id="tabLog" style="display:none;">
+  <div class="log-card" id="logList"><div class="empty">아직 기록이 없습니다.</div></div>
+</div>
+
+<!-- 도구 -->
+<div class="tools-section">
+  <div class="tools-title">데이터 저장 및 백업</div>
+  <div class="tools-row">
+    <button class="btn-tool" onclick="exportXlsx()">📊 엑셀 저장</button>
+    <button class="btn-tool" onclick="exportJson()">📤 JSON 백업</button>
+    <button class="btn-tool" onclick="document.getElementById('importFile').click()">📥 JSON 가져오기</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)"/>
+    <button class="btn-tool btn-danger" onclick="resetAll()">초기화</button>
+  </div>
+</div>
+
+<div class="footer">bible-tracker · 데이터는 이 브라우저 localStorage에 저장됩니다</div>
+</div>
+
+<script>
+// ── 성경 데이터 ───────────────────────────────────────────
+const BIBLE=[
+  {n:"창세기",c:50,t:"OT"},{n:"출애굽기",c:40,t:"OT"},{n:"레위기",c:27,t:"OT"},
+  {n:"민수기",c:36,t:"OT"},{n:"신명기",c:34,t:"OT"},{n:"여호수아",c:24,t:"OT"},
+  {n:"사사기",c:21,t:"OT"},{n:"룻기",c:4,t:"OT"},{n:"사무엘상",c:31,t:"OT"},
+  {n:"사무엘하",c:24,t:"OT"},{n:"열왕기상",c:22,t:"OT"},{n:"열왕기하",c:25,t:"OT"},
+  {n:"역대상",c:29,t:"OT"},{n:"역대하",c:36,t:"OT"},{n:"에스라",c:10,t:"OT"},
+  {n:"느헤미야",c:13,t:"OT"},{n:"에스더",c:10,t:"OT"},{n:"욥기",c:42,t:"OT"},
+  {n:"시편",c:150,t:"OT"},{n:"잠언",c:31,t:"OT"},{n:"전도서",c:12,t:"OT"},
+  {n:"아가",c:8,t:"OT"},{n:"이사야",c:66,t:"OT"},{n:"예레미야",c:52,t:"OT"},
+  {n:"예레미야애가",c:5,t:"OT"},{n:"에스겔",c:48,t:"OT"},{n:"다니엘",c:12,t:"OT"},
+  {n:"호세아",c:14,t:"OT"},{n:"요엘",c:3,t:"OT"},{n:"아모스",c:9,t:"OT"},
+  {n:"오바댜",c:1,t:"OT"},{n:"요나",c:4,t:"OT"},{n:"미가",c:7,t:"OT"},
+  {n:"나훔",c:3,t:"OT"},{n:"하박국",c:3,t:"OT"},{n:"스바냐",c:3,t:"OT"},
+  {n:"학개",c:2,t:"OT"},{n:"스가랴",c:14,t:"OT"},{n:"말라기",c:4,t:"OT"},
+  {n:"마태복음",c:28,t:"NT"},{n:"마가복음",c:16,t:"NT"},{n:"누가복음",c:24,t:"NT"},
+  {n:"요한복음",c:21,t:"NT"},{n:"사도행전",c:28,t:"NT"},{n:"로마서",c:16,t:"NT"},
+  {n:"고린도전서",c:16,t:"NT"},{n:"고린도후서",c:13,t:"NT"},{n:"갈라디아서",c:6,t:"NT"},
+  {n:"에베소서",c:6,t:"NT"},{n:"빌립보서",c:4,t:"NT"},{n:"골로새서",c:4,t:"NT"},
+  {n:"데살로니가전서",c:5,t:"NT"},{n:"데살로니가후서",c:3,t:"NT"},{n:"디모데전서",c:6,t:"NT"},
+  {n:"디모데후서",c:4,t:"NT"},{n:"디도서",c:3,t:"NT"},{n:"빌레몬서",c:1,t:"NT"},
+  {n:"히브리서",c:13,t:"NT"},{n:"야고보서",c:5,t:"NT"},{n:"베드로전서",c:5,t:"NT"},
+  {n:"베드로후서",c:3,t:"NT"},{n:"요한일서",c:5,t:"NT"},{n:"요한이서",c:1,t:"NT"},
+  {n:"요한삼서",c:1,t:"NT"},{n:"유다서",c:1,t:"NT"},{n:"요한계시록",c:22,t:"NT"}
+];
+const TOTAL=1189,OT_C=929,NT_C=260;
+const BOOK_START=[];
+let _c=0; BIBLE.forEach(b=>{BOOK_START.push(_c);_c+=b.c;});
+
+function getBookInfo(totalChap){
+  if(totalChap<=0)return null;
+  const pos=((totalChap-1)%TOTAL)+1;
+  let cum=0;
+  for(let i=0;i<BIBLE.length;i++){
+    cum+=BIBLE[i].c;
+    if(pos<=cum) return{book:BIBLE[i].n,chapInBook:pos-(cum-BIBLE[i].c),totalInBook:BIBLE[i].c,testament:BIBLE[i].t,bookIndex:i};
+  }
+  return null;
+}
+function bookChapToCum(bookIdx,chap){return BOOK_START[bookIdx]+chap;}
+
+function getRangeText(startCum,endCum){
+  if(startCum<=0||endCum<=0)return'';
+  const s=getBookInfo(startCum),e=getBookInfo(endCum);
+  if(!s||!e)return'';
+  if(s.bookIndex===e.bookIndex){
+    return s.chapInBook===e.chapInBook?s.book+' '+s.chapInBook+'장':s.book+' '+s.chapInBook+'–'+e.chapInBook+'장';
+  }
+  return s.book+' '+s.chapInBook+'장 – '+e.book+' '+e.chapInBook+'장';
+}
+
+function getTestamentProgress(totalChap){
+  if(totalChap<=0)return{otRead:0,ntRead:0};
+  const pos=((totalChap-1)%TOTAL)+1;
+  let otRead=0,ntRead=0,cum=0;
+  for(let i=0;i<BIBLE.length;i++){
+    const next=cum+BIBLE[i].c;
+    if(pos>=next){BIBLE[i].t==='OT'?otRead+=BIBLE[i].c:ntRead+=BIBLE[i].c;}
+    else{const p=pos-cum;BIBLE[i].t==='OT'?otRead+=p:ntRead+=p;break;}
+    cum=next;
+  }
+  return{otRead,ntRead};
+}
+
+// ── 데이터 ────────────────────────────────────────────────
+function getToday(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function loadData(){
+  try{
+    const r=localStorage.getItem('bible_tracker_v2');
+    if(r)return JSON.parse(r);
+    const old=localStorage.getItem('bible_tracker_v1');
+    if(old){const o=JSON.parse(old);return{records:o.records||{},retroDates:o.retroDates||[],ranges:{},setup:null};}
+  }catch(e){}
+  return{records:{},retroDates:[],ranges:{},setup:null};
+}
+function saveData(d){try{localStorage.setItem('bible_tracker_v2',JSON.stringify(d));}catch(e){}}
+
+function calcStreak(dates,records,goal){
+  let streak=0;const today=new Date();
+  for(let i=0;i<9999;i++){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(records[key]!==undefined&&records[key]>=goal)streak++;else break;
+  }
+  return streak;
+}
+
+function buildCumMap(records,offset){
+  const dates=Object.keys(records).sort();
+  let cum=offset;const map={};
+  dates.forEach(d=>{cum+=records[d];map[d]=cum;});
+  return map;
+}
+
+// ── 보정 상태 ─────────────────────────────────────────────
+let todayCorrection = null;   // {bookIdx, chap} or null
+let retroCorrection = null;
+
+// ── UI 초기화 ──────────────────────────────────────────────
+function fillBookSelect(selId,defaultIdx=0){
+  const sel=document.getElementById(selId);
+  sel.innerHTML=BIBLE.map((b,i)=>`<option value="${i}">${b.n} (${b.c}장)</option>`).join('');
+  sel.value=defaultIdx;
+}
+
+function initBookSelects(){
+  fillBookSelect('spBookSel',0);
+  fillBookSelect('rcBookSel',0);
+  fillBookSelect('rrBookSel',0);
+}
+
+function onStartBookChange(){
+  const idx=parseInt(document.getElementById('spBookSel').value);
+  const chapEl=document.getElementById('spChapSel');
+  chapEl.max=BIBLE[idx].c;
+  if(parseInt(chapEl.value)>BIBLE[idx].c)chapEl.value=1;
+  updateSpPreview();
+}
+
+function onRcBookChange(){
+  const idx=parseInt(document.getElementById('rcBookSel').value);
+  const el=document.getElementById('rcChapSel');
+  el.max=BIBLE[idx].c;
+  if(parseInt(el.value)>BIBLE[idx].c)el.value=1;
+  updateCorrectPreview();
+}
+
+function onRrBookChange(){
+  const idx=parseInt(document.getElementById('rrBookSel').value);
+  const el=document.getElementById('rrChapSel');
+  el.max=BIBLE[idx].c;
+  if(parseInt(el.value)>BIBLE[idx].c)el.value=1;
+  updateRetroCorrectPreview();
+}
+
+function updateSpPreview(){
+  const bookIdx=parseInt(document.getElementById('spBookSel').value);
+  const chap=parseInt(document.getElementById('spChapSel').value)||1;
+  if(bookIdx===0&&chap===1){document.getElementById('spPreview').textContent='→ 창세기 1장부터 시작';return;}
+  document.getElementById('spPreview').textContent=`→ ${BIBLE[bookIdx].n} ${chap}장부터 시작`;
+}
+
+function updateSetupHint(){
+  const dokVal=document.getElementById('setGoalDok').value;
+  const yrVal=document.getElementById('setGoalYears').value;
+  document.getElementById('customDokField').style.display=dokVal==='custom'?'block':'none';
+  document.getElementById('customYearsField').style.display=yrVal==='custom'?'block':'none';
+  const dok=dokVal==='custom'?parseInt(document.getElementById('setCustomDok').value):parseInt(dokVal);
+  const years=yrVal==='custom'?parseFloat(document.getElementById('setCustomYears').value):parseFloat(yrVal);
+  if(!dok||!years)return;
+  const daily=Math.ceil(TOTAL*dok/Math.round(years*365));
+  document.getElementById('setDailyGoal').value=daily;
+  document.getElementById('setupHint').textContent=`→ 총 ${(TOTAL*dok).toLocaleString()}장 / ${Math.round(years*365)}일 = 하루 약 ${daily}장`;
+}
+
+// ── 오늘 입력 미리보기 + 보정 ────────────────────────────
+function updateInputPreview(){
+  const val=parseInt(document.getElementById('chapInput').value);
+  const area=document.getElementById('rangePreviewArea');
+  if(isNaN(val)||val<=0){area.style.display='none';todayCorrection=null;return;}
+  area.style.display='block';
+  const data=loadData();
+  const offset=data.setup?.startOffset||0;
+  const currentCum=offset+Object.values(data.records).reduce((s,v)=>s+v,0);
+  const endCum=currentCum+val;
+  const rangeText=getRangeText(currentCum+1,endCum);
+  document.getElementById('rangeAutoText').textContent=rangeText?`→ ${rangeText}`:'범위 계산 중...';
+  // 보정 셀렉트 초기값: 자동계산 끝 위치
+  const endInfo=getBookInfo(endCum);
+  if(endInfo){
+    document.getElementById('rcBookSel').value=endInfo.bookIndex;
+    document.getElementById('rcChapSel').value=endInfo.chapInBook;
+    document.getElementById('rcChapSel').max=endInfo.totalInBook;
+  }
+  updateCorrectPreview();
+}
+
+function toggleCorrect(){
+  const body=document.getElementById('correctBody');
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+}
+
+function updateCorrectPreview(){
+  const bookIdx=parseInt(document.getElementById('rcBookSel').value);
+  const chap=parseInt(document.getElementById('rcChapSel').value)||1;
+  const data=loadData();
+  const offset=data.setup?.startOffset||0;
+  const currentCum=offset+Object.values(data.records).reduce((s,v)=>s+v,0);
+  const val=parseInt(document.getElementById('chapInput').value)||0;
+  const autoEndCum=currentCum+val;
+  const correctedEndCum=bookChapToCum(bookIdx,chap);
+  const startInfo=getBookInfo(currentCum+1);
+  const rangeText=startInfo?getRangeText(currentCum+1,correctedEndCum):'';
+  const diff=correctedEndCum-autoEndCum;
+  const diffText=diff===0?'(자동 계산과 동일)':diff>0?`(+${diff}장 조정)`:`(${diff}장 조정)`;
+  document.getElementById('correctResult').innerHTML=rangeText
+    ?`<span style="color:var(--blue);font-weight:500;">→ ${rangeText}</span> <span style="color:var(--text3);">${diffText}</span>`:'';
+}
+
+function applyCorrection(){
+  const bookIdx=parseInt(document.getElementById('rcBookSel').value);
+  const chap=parseInt(document.getElementById('rcChapSel').value)||1;
+  todayCorrection={bookIdx,chap};
+  const bookName=BIBLE[bookIdx].n;
+  document.getElementById('rangeAutoText').textContent=`→ 수정됨: ~${bookName} ${chap}장까지`;
+  document.getElementById('rangeAutoText').style.color='var(--purple)';
+  document.getElementById('correctBody').style.display='none';
+  document.getElementById('correctResult').textContent='✓ 보정 적용됨 — 기록하기 버튼을 눌러 저장하세요.';
+  document.getElementById('correctResult').style.color='var(--green)';
+}
+
+function clearCorrection(){
+  todayCorrection=null;
+  document.getElementById('rangeAutoText').style.color='var(--blue)';
+  updateInputPreview();
+  document.getElementById('correctResult').textContent='';
+}
+
+// ── 소급 미리보기 + 보정 ────────────────────────────────
+function updateRetroPreview(){
+  const val=parseInt(document.getElementById('retroChap').value);
+  const date=document.getElementById('retroDate').value;
+  const area=document.getElementById('retroPreviewArea');
+  if(isNaN(val)||val<=0||!date){area.style.display='none';retroCorrection=null;return;}
+  area.style.display='block';
+  const data=loadData();
+  const offset=data.setup?.startOffset||0;
+  const sortedDates=Object.keys(data.records).sort().filter(d=>d<date);
+  const cumBefore=offset+sortedDates.reduce((s,d)=>s+data.records[d],0);
+  const endCum=cumBefore+val;
+  const rangeText=getRangeText(cumBefore+1,endCum);
+  document.getElementById('retroAutoText').textContent=rangeText?`→ ${rangeText}`:'범위 계산 중...';
+  const endInfo=getBookInfo(endCum);
+  if(endInfo){
+    document.getElementById('rrBookSel').value=endInfo.bookIndex;
+    document.getElementById('rrChapSel').value=endInfo.chapInBook;
+    document.getElementById('rrChapSel').max=endInfo.totalInBook;
+  }
+  updateRetroCorrectPreview();
+}
+
+function toggleRetroCorrect(){
+  const body=document.getElementById('retroCorrectBody');
+  body.style.display=body.style.display==='none'?'block':'none';
+}
+
+function updateRetroCorrectPreview(){
+  const bookIdx=parseInt(document.getElementById('rrBookSel').value);
+  const chap=parseInt(document.getElementById('rrChapSel').value)||1;
+  const date=document.getElementById('retroDate').value;
+  const val=parseInt(document.getElementById('retroChap').value)||0;
+  if(!date)return;
+  const data=loadData();
+  const offset=data.setup?.startOffset||0;
+  const sortedDates=Object.keys(data.records).sort().filter(d=>d<date);
+  const cumBefore=offset+sortedDates.reduce((s,d)=>s+data.records[d],0);
+  const autoEnd=cumBefore+val;
+  const corrEnd=bookChapToCum(bookIdx,chap);
+  const rangeText=getRangeText(cumBefore+1,corrEnd);
+  const diff=corrEnd-autoEnd;
+  const diffText=diff===0?'(자동 계산과 동일)':diff>0?`(+${diff}장 조정)`:`(${diff}장 조정)`;
+  document.getElementById('retroCorrectResult').innerHTML=rangeText
+    ?`<span style="color:var(--blue);font-weight:500;">→ ${rangeText}</span> <span style="color:var(--text3);">${diffText}</span>`:'';
+}
+
+function applyRetroCorrection(){
+  const bookIdx=parseInt(document.getElementById('rrBookSel').value);
+  const chap=parseInt(document.getElementById('rrChapSel').value)||1;
+  retroCorrection={bookIdx,chap};
+  document.getElementById('retroAutoText').textContent=`→ 수정됨: ~${BIBLE[bookIdx].n} ${chap}장까지`;
+  document.getElementById('retroAutoText').style.color='var(--purple)';
+  document.getElementById('retroCorrectBody').style.display='none';
+  document.getElementById('retroCorrectResult').textContent='✓ 보정 적용됨 — 저장 버튼을 눌러주세요.';
+  document.getElementById('retroCorrectResult').style.color='var(--green)';
+}
+
+function clearRetroCorrection(){
+  retroCorrection=null;
+  document.getElementById('retroAutoText').style.color='var(--blue)';
+  updateRetroPreview();
+  document.getElementById('retroCorrectResult').textContent='';
+}
+
+// ── 설정 저장 ─────────────────────────────────────────────
+function toggleCard(bodyId,toggleId){
+  const body=document.getElementById(bodyId);
+  const toggle=document.getElementById(toggleId);
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  toggle.textContent=open?'▲ 닫기':'▼ 열기';
+  if(bodyId==='setupBody'&&open)loadSetupUI();
+  if(bodyId==='retroBody'&&open){
+    document.getElementById('retroDate').value=getToday();
+    document.getElementById('retroDate').max=getToday();
+  }
+}
+
+function loadSetupUI(){
+  const s=loadData().setup;
+  if(s){
+    const dokSel=document.getElementById('setGoalDok');
+    ['1','3','5','10','20'].includes(String(s.dok))?dokSel.value=String(s.dok):(dokSel.value='custom',document.getElementById('setCustomDok').value=s.dok,document.getElementById('customDokField').style.display='block');
+    const yrSel=document.getElementById('setGoalYears');
+    ['1','2','3','5'].includes(String(s.years))?yrSel.value=String(s.years):(yrSel.value='custom',document.getElementById('setCustomYears').value=s.years,document.getElementById('customYearsField').style.display='block');
+    document.getElementById('setStartDate').value=s.startDate;
+    if(s.startOffset>0){
+      const info=getBookInfo(s.startOffset+1);
+      if(info){document.getElementById('spBookSel').value=info.bookIndex;document.getElementById('spChapSel').value=info.chapInBook;}
+    }
+  }else{document.getElementById('setStartDate').value=getToday();}
+  updateSetupHint();updateSpPreview();
+}
+
+function saveSetup(){
+  const dokVal=document.getElementById('setGoalDok').value;
+  const yrVal=document.getElementById('setGoalYears').value;
+  const dok=dokVal==='custom'?parseInt(document.getElementById('setCustomDok').value):parseInt(dokVal);
+  const years=yrVal==='custom'?parseFloat(document.getElementById('setCustomYears').value):parseFloat(yrVal);
+  const startDate=document.getElementById('setStartDate').value;
+  const dailyGoal=parseInt(document.getElementById('setDailyGoal').value);
+  const bookIdx=parseInt(document.getElementById('spBookSel').value);
+  const chap=parseInt(document.getElementById('spChapSel').value)||1;
+  const startOffset=(bookIdx===0&&chap===1)?0:bookChapToCum(bookIdx,chap)-1;
+  if(!dok||!years||!startDate){alert('모든 항목을 입력해주세요.');return;}
+  const data=loadData();
+  data.setup={dok,years,startDate,dailyGoal,startOffset};
+  saveData(data);
+  document.getElementById('setupBody').style.display='none';
+  document.getElementById('setupToggle').textContent='▼ 열기';
+  render();alert('저장되었습니다!');
+}
+
+// ── 렌더 ──────────────────────────────────────────────────
+let chartInstance=null;
+
+function render(){
+  const data=loadData();
+  const{records,retroDates=[],ranges={},setup}=data;
+  const dates=Object.keys(records).sort();
+  const offset=setup?.startOffset||0;
+  const recordedChap=dates.reduce((s,d)=>s+records[d],0);
+  const totalChap=offset+recordedChap;
+  const goal=setup?.dailyGoal||10;
+  const totalGoal=setup?TOTAL*setup.dok:TOTAL*10;
+  const totalDays=dates.length;
+  const successDays=dates.filter(d=>records[d]>=goal).length;
+  const rate=totalDays>0?Math.round(successDays/totalDays*100):null;
+  const doksoo=Math.floor(totalChap/TOTAL);
+  const remainder=totalChap%TOTAL;
+  const doksooProgress=totalChap>0?Math.round(remainder/TOTAL*100):0;
+  const totalPct=Math.min(100,Math.round(totalChap/totalGoal*100));
+  const streak=calcStreak(dates,records,goal);
+
+  if(setup){
+    document.getElementById('headerSubtitle').textContent=`${setup.dok}독 ${setup.years}년 목표 · 1일 ${setup.dailyGoal}장 · 시작 ${setup.startDate}`;
+    document.getElementById('setupBadge').textContent=`${setup.dok}독 ${setup.years}년`;
+  }
+  document.getElementById('totalChap').textContent=totalChap.toLocaleString();
+  document.getElementById('doksooInfo').textContent=doksoo>0?doksoo+'독 완료 · '+(doksoo+1)+'독 진행 중':'1독 진행 중';
+  document.getElementById('totalPct').textContent=totalPct+'%';
+  document.getElementById('totalGoalSub').textContent='목표 '+totalGoal.toLocaleString()+'장';
+  document.getElementById('totalDays').textContent=totalDays;
+  document.getElementById('successDays').textContent=successDays;
+  document.getElementById('goalPerDaySub').textContent=goal+'장 이상';
+  document.getElementById('successRate').textContent=rate!==null?rate+'%':'-';
+  document.getElementById('streakText').textContent='연속 '+streak+'일';
+
+  // 현재 읽는 책
+  const dispChap=totalChap>0?totalChap:1;
+  const nowInfo=getBookInfo(dispChap);
+  if(nowInfo){
+    document.getElementById('nrBook').textContent=nowInfo.book;
+    document.getElementById('nrChapter').textContent=nowInfo.chapInBook+'장';
+    const isNT=nowInfo.testament==='NT';
+    const tag=document.getElementById('nrTestament');
+    tag.textContent=isNT?'신약':'구약';
+    tag.className='nr-tag '+(isNT?'nr-tag-nt':'nr-tag-ot');
+    document.getElementById('nrBookProg').textContent=nowInfo.chapInBook+' / '+nowInfo.totalInBook+'장';
+    document.getElementById('nrBookCount').textContent=(nowInfo.bookIndex+1)+' / 66권';
+    const today=getToday();
+    if(records[today]){
+      const cumMap=buildCumMap(records,offset);
+      const endCum=cumMap[today];
+      const startCum=endCum-records[today];
+      const rangeKey=today;
+      const rangeText=ranges[rangeKey]
+        ?getRangeText(startCum+1,bookChapToCum(ranges[rangeKey].bookIdx,ranges[rangeKey].chap))
+        :getRangeText(startCum+1,endCum);
+      document.getElementById('nrRange').textContent=rangeText?'오늘: '+rangeText:'';
+    }else{document.getElementById('nrRange').textContent='';}
+  }
+
+  // 구약/신약
+  const{otRead,ntRead}=getTestamentProgress(totalChap);
+  const otPct=Math.round(otRead/OT_C*100),ntPct=Math.round(ntRead/NT_C*100);
+  document.getElementById('otPct').textContent=otPct+'%';
+  document.getElementById('otBar').style.width=otPct+'%';
+  document.getElementById('otDetail').textContent=otRead+' / 929장 · 39권';
+  document.getElementById('ntPct').textContent=ntPct+'%';
+  document.getElementById('ntBar').style.width=ntPct+'%';
+  document.getElementById('ntDetail').textContent=ntRead+' / 260장 · 27권';
+
+  // 독 진도
+  document.getElementById('progLabel').textContent=(doksoo+1)+'독 진도';
+  document.getElementById('progPct').textContent=doksooProgress+'%';
+  document.getElementById('progBar').style.width=doksooProgress+'%';
+  document.getElementById('progDetail').textContent=remainder.toLocaleString()+' / 1,189장 ('+(TOTAL-remainder).toLocaleString()+'장 남음)';
+
+  document.getElementById('todayMsg').textContent=records[getToday()]!==undefined
+    ?'✓ 오늘 '+records[getToday()]+'장 기록됨':'오늘 아직 기록이 없습니다.';
+
+  updateInputPreview();
+  renderLog(data);
+  renderChart(data,goal);
+}
+
+function renderLog(data){
+  const{records,retroDates=[],ranges={},setup}=data;
+  const goal=setup?.dailyGoal||10;
+  const offset=setup?.startOffset||0;
+  const dates=Object.keys(records).sort();
+  const el=document.getElementById('logList');
+  if(!dates.length){el.innerHTML='<div class="empty">아직 기록이 없습니다.</div>';return;}
+  const cumMap=buildCumMap(records,offset);
+  el.innerHTML=[...dates].reverse().map(d=>{
+    const v=records[d],ok=v>=goal,isRetro=retroDates.includes(d);
+    const endCum=cumMap[d],startCum=endCum-v;
+    const correction=ranges[d];
+    let rangeText,isCorrected=false;
+    if(correction){
+      rangeText=getRangeText(startCum+1,bookChapToCum(correction.bookIdx,correction.chap));
+      isCorrected=true;
+    }else{rangeText=getRangeText(startCum+1,endCum);}
+    const info=getBookInfo(endCum);
+    const testament=info?(info.testament==='OT'?'구약':'신약'):'';
+    return`<div class="log-row">
+      <div class="log-left">
+        <span class="log-date">${d}</span>
+        <span class="log-range${isCorrected?' corrected':''}">${rangeText}</span>
+        <span class="log-detail">${testament}</span>
+      </div>
+      <div class="log-right">
+        <span class="log-count">${v}장</span>
+        <span class="badge ${ok?'badge-ok':'badge-fail'}">${ok?'달성':'미달'}</span>
+        ${isRetro?'<span class="badge badge-retro">소급</span>':''}
+        ${isCorrected?'<span class="badge badge-corrected">보정</span>':''}
+        <button class="btn-del" onclick="deleteRecord('${d}')">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderChart(data,goal){
+  const{records,retroDates=[]}=data;
+  const dates=Object.keys(records).sort();
+  const recent=[...dates].slice(-30);
+  const ctx=document.getElementById('myChart').getContext('2d');
+  if(chartInstance)chartInstance.destroy();
+  chartInstance=new Chart(ctx,{
+    type:'bar',
+    data:{labels:recent.map(d=>d.slice(5)),datasets:[{data:recent.map(d=>records[d]),backgroundColor:recent.map(d=>retroDates.includes(d)?'#1a6fa8':records[d]>=goal?'#2d7d5a':'#e8c5c2'),borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:c=>c[0].label+'일',label:c=>c.raw+'장'+(retroDates.includes(recent[c.dataIndex])?' (소급)':'')}}},scales:{x:{ticks:{font:{size:11},color:'#9e9b96',autoSkip:true,maxTicksLimit:10},grid:{display:false},border:{display:false}},y:{ticks:{font:{size:11},color:'#9e9b96',callback:v=>v+'장'},grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},beginAtZero:true}}}
+  });
+}
+
+// ── 액션 ──────────────────────────────────────────────────
+function addToday(){
+  const val=parseInt(document.getElementById('chapInput').value);
+  if(isNaN(val)||val<0||val>200){alert('0~200 사이의 숫자를 입력해주세요.');return;}
+  const data=loadData();
+  const today=getToday();
+  data.records[today]=val;
+  if(!data.ranges)data.ranges={};
+  if(todayCorrection){data.ranges[today]=todayCorrection;}
+  else{delete data.ranges[today];}
+  saveData(data);
+  todayCorrection=null;
+  document.getElementById('rangePreviewArea').style.display='none';
+  document.getElementById('correctBody').style.display='none';
+  document.getElementById('rangeAutoText').style.color='var(--blue)';
+  render();
+}
+
+function addRetro(){
+  const date=document.getElementById('retroDate').value;
+  const val=parseInt(document.getElementById('retroChap').value);
+  const msg=document.getElementById('retroMsg');
+  if(!date){msg.style.color='var(--red)';msg.textContent='날짜를 선택해주세요.';return;}
+  if(isNaN(val)||val<0||val>200){msg.style.color='var(--red)';msg.textContent='0~200 사이의 숫자를 입력해주세요.';return;}
+  if(date>getToday()){msg.style.color='var(--red)';msg.textContent='미래 날짜는 입력할 수 없습니다.';return;}
+  const data=loadData();
+  const isUpdate=data.records[date]!==undefined;
+  const prev=data.records[date];
+  data.records[date]=val;
+  if(!data.retroDates)data.retroDates=[];
+  if(date!==getToday()&&!data.retroDates.includes(date))data.retroDates.push(date);
+  if(!data.ranges)data.ranges={};
+  if(retroCorrection){data.ranges[date]=retroCorrection;}
+  else{delete data.ranges[date];}
+  saveData(data);
+  retroCorrection=null;
+  document.getElementById('retroPreviewArea').style.display='none';
+  document.getElementById('retroAutoText').style.color='var(--blue)';
+  msg.style.color='var(--green)';
+  msg.textContent=isUpdate?`✓ ${date} 기록을 ${prev}장 → ${val}장으로 수정했습니다.`:`✓ ${date} 날짜로 ${val}장 소급 기록했습니다.`;
+  render();
+}
+
+function deleteRecord(date){
+  if(!confirm(date+' 기록을 삭제할까요?'))return;
+  const data=loadData();
+  delete data.records[date];
+  if(data.retroDates)data.retroDates=data.retroDates.filter(d=>d!==date);
+  if(data.ranges)delete data.ranges[date];
+  saveData(data);render();
+}
+
+function switchTab(tab,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tabChart').style.display=tab==='chart'?'block':'none';
+  document.getElementById('tabLog').style.display=tab==='log'?'block':'none';
+  if(tab==='chart'){const d=loadData();renderChart(d,d.setup?.dailyGoal||10);}
+}
+
+function exportXlsx(){
+  const data=loadData();
+  const{records,retroDates=[],ranges={},setup}=data;
+  const dates=Object.keys(records).sort();
+  if(!dates.length){alert('기록된 데이터가 없습니다.');return;}
+  const wb=XLSX.utils.book_new();
+  const goal=setup?.dailyGoal||10;
+  const offset=setup?.startOffset||0;
+  const cumMap=buildCumMap(records,offset);
+  const rows=[['날짜','읽은 장수','읽은 구간','구약/신약','달성 여부','소급 여부','보정 여부','누적 장수','현재 독수']];
+  dates.forEach(d=>{
+    const v=records[d],endCum=cumMap[d],startCum=endCum-v;
+    const correction=ranges[d];
+    const rangeText=correction?getRangeText(startCum+1,bookChapToCum(correction.bookIdx,correction.chap)):getRangeText(startCum+1,endCum);
+    const info=getBookInfo(endCum);
+    rows.push([d,v,rangeText,info?(info.testament==='OT'?'구약':'신약'):'',v>=goal?'달성':'미달',retroDates.includes(d)?'소급':'당일',correction?'보정':'자동',endCum,Math.floor(endCum/TOTAL)+1+'독']);
+  });
+  const ws1=XLSX.utils.aoa_to_sheet(rows);
+  ws1['!cols']=[{wch:14},{wch:10},{wch:30},{wch:8},{wch:8},{wch:8},{wch:8},{wch:12},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws1,'일별 기록');
+  const totalChap=offset+dates.reduce((s,d)=>s+records[d],0);
+  const successDays=dates.filter(d=>records[d]>=goal).length;
+  const ws2=XLSX.utils.aoa_to_sheet([
+    ['항목','값'],
+    ['목표 독수',setup?setup.dok+'독':'10독'],['목표 기간',setup?setup.years+'년':'3년'],
+    ['1일 목표',setup?setup.dailyGoal+'장':'10장'],['시작일',setup?setup.startDate:'-'],
+    ['시작 위치',(()=>{if(!setup||!setup.startOffset)return'창세기 1장';const i=getBookInfo(setup.startOffset+1);return i?i.book+' '+i.chapInBook+'장':'-';})()],
+    ['총 기록일수',dates.length+'일'],['누적 장수',totalChap+'장'],
+    ['달성일',successDays+'일'],['달성률',dates.length>0?(successDays/dates.length*100).toFixed(1)+'%':'-'],
+    ['완료 독수',Math.floor(totalChap/TOTAL)+'독'],
+    ['현재 읽는 책',(()=>{const i=getBookInfo(totalChap);return i?i.book+' '+i.chapInBook+'장':'-';})()],
+    ['저장 일시',new Date().toLocaleString('ko-KR')],
+  ]);
+  ws2['!cols']=[{wch:16},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws2,'요약 통계');
+  XLSX.writeFile(wb,'성경읽기_트래커_'+getToday()+'.xlsx');
+}
+
+function exportJson(){
+  const blob=new Blob([JSON.stringify(loadData(),null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='bible_tracker_backup_'+getToday()+'.json';a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event){
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{const d=JSON.parse(e.target.result);if(!d.records)throw new Error();if(!confirm('기존 데이터를 덮어쓸까요?'))return;saveData(d);render();alert('가져오기 완료!');}
+    catch(err){alert('파일을 읽을 수 없습니다.');}
+  };
+  reader.readAsText(file);event.target.value='';
+}
+
+function resetAll(){
+  if(!confirm('모든 기록과 설정을 초기화할까요?\n되돌릴 수 없습니다.'))return;
+  saveData({records:{},retroDates:[],ranges:{},setup:null});render();
+}
+
+// ── 초기 실행 ─────────────────────────────────────────────
+initBookSelects();
+updateSetupHint();
+render();
+</script>
+</body>
+</html>
